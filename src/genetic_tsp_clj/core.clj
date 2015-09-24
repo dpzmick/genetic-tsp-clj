@@ -40,11 +40,12 @@
       [lower-bound (rand-int (count parentA))
        upper-bound (+ lower-bound (rand-int (- (count parentA) lower-bound)))
        subset      (subvec parentA lower-bound upper-bound)
-       offspring   (flatten
-                     [(take lower-bound (repeat nil))
-                      subset
-                      (take (- (count parentA) upper-bound) (repeat nil))])]
-      (populate-offspring offspring parentB))
+       offspring   (concat
+                     (take lower-bound (repeat nil))
+                     subset
+                     (take (- (count parentA) upper-bound) (repeat nil)))]
+      (populate-offspring offspring parentB)
+      )
     (Exception. "parents must be the same size")))
 
 (defn distance
@@ -64,6 +65,47 @@
         (first remain)
         (rest remain)
         (+ fitness (distance (first remain) prev))))))
+
+(defn fitness-cmp
+  [a b]
+  (< (fitness a) (fitness b)))
+
+(defn generate-problem
+  "creates a problem with n elements"
+  [n m]
+  (take n (map vector
+               (repeatedly #(rand-int m))
+               (repeatedly #(rand-int m)))))
+
+(defn make-population
+  [problem size]
+  (map mutate (repeat size problem)))
+
+(defn sort-population [population] (sort fitness-cmp population))
+
+(defn select-by-tournament
+  "takes t-size random elements from population and keeps fittest"
+  [population t-size]
+  (first (sort-population (take t-size (shuffle population)))))
+
+(defn build-new-population
+  [population t-size mutation-rate]
+  (map #(if (< (rand) mutation-rate)
+          (mutate %)
+          %)
+       (take (count population) (repeatedly #(crossover
+                                               (select-by-tournament population t-size)
+                                               (select-by-tournament population t-size))))))
+
+(defn solve-problem-serial
+  "solves a problem. stops when we hit iteration limit or fitness changes less than tolerance"
+  ([problem itereration-limit pop-size t-size mut-rate]
+   (loop [i 0
+          population (make-population problem pop-size)]
+
+     (if (= i itereration-limit)
+       (first (sort-population population))
+       (recur (+ 1 i) (build-new-population population t-size mut-rate))))))
 
 (defn -main
   "I don't do a whole lot ... yet."
