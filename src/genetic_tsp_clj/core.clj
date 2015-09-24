@@ -1,5 +1,7 @@
 (ns genetic-tsp-clj.core
-  (:gen-class))
+  (:require [clojure.math.numeric-tower :as math]))
+
+(defn sq [a] (math/expt a 2))
 
 (defn in?
   "true if seq contains elm"
@@ -16,6 +18,8 @@
 ;; set Offspring_(i,j) = S_(i,j)
 ;; iterate over all x in Parent. if x not in Offspring, append x to the earliest
 ;; unfilled position in the offspring, if x in Offspring, skip it
+
+;; TODO this is probably horribly inefficient
 (defn populate-offspring
   "fills in nils in an offspring using the given parent"
   ([offspring parent] (populate-offspring [] offspring parent))
@@ -42,6 +46,24 @@
                       (take (- (count parentA) upper-bound) (repeat nil))])]
       (populate-offspring offspring parentB))
     (Exception. "parents must be the same size")))
+
+(defn distance
+  [a b]
+  (math/sqrt (+
+              (sq (- (first a)  (first b)))
+              (sq (- (second a) (second b))))))
+
+(defn fitness
+  [individual]
+  (loop [prev   (first individual)
+         remain (rest individual)
+         fitness 0.0]
+    (if (empty? remain)
+      fitness
+      (recur
+        (first remain)
+        (rest remain)
+        (+ fitness (distance (first remain) prev))))))
 
 (defn -main
   "I don't do a whole lot ... yet."
