@@ -16,25 +16,9 @@
 (defn mutate [individual] (shuffle individual))
 
 ;; crossover needs to enforce the same constraint, so use this funky mechanism
-;; select some random subset S_(i, j) \in A
-;; set Offspring_(i,j) = S_(i,j)
+;; take 0->n from parentA (hope the good subset is in here)
 ;; iterate over all x in Parent. if x not in Offspring, append x to the earliest
 ;; unfilled position in the offspring, if x in Offspring, skip it
-
-;; TODO this is probably horribly inefficient
-(defn populate-offspring
-  "fills in nils in an offspring using the given parent"
-  ([offspring parent] (populate-offspring [] offspring parent))
-  ([acc rem-off rem-parent]
-   (if (empty? rem-off)
-     acc
-     (if (nil? (first rem-off))
-       ;; find first parent value not in offspring
-       (let
-         [remaining-parent (filter #(not (in? (concat acc rem-off) %)) rem-parent)]
-         (recur (conj acc (first remaining-parent)) (rest rem-off) remaining-parent))
-       (recur (conj acc (first rem-off)) (rest rem-off) rem-parent)))))
-
 (defn crossover
   [parentA parentB]
   {:pre [(= (count parentA) (count parentB))]
@@ -43,14 +27,10 @@
             (nil? (some nil? %)))]} ;; some weird bug causes this to happen sometimes
 
   (let
-    [lower-bound (rand-int (count parentA))
-     upper-bound (+ lower-bound (rand-int (- (count parentA) lower-bound)))
-     subset      (subvec parentA lower-bound upper-bound)
-     offspring   (concat
-                   (take lower-bound (repeat nil))
-                   subset
-                   (take (- (count parentA) upper-bound) (repeat nil)))]
-    (populate-offspring offspring parentB)))
+    [split-point (+ 1 (rand-int (- (count parentA) 1))) ;; random between 0-A
+     subset      (subvec parentA 0 split-point)
+     bwithoutsubset (filter #(not (in? subset %)) parentB)]
+    (reduce conj subset bwithoutsubset)))
 
 (defn distance
   [a b]
@@ -105,15 +85,20 @@
 (defn solve-problem-serial
   "solves a problem. stops when we hit iteration limit or fitness changes less than tolerance"
   ([problem itereration-limit pop-size t-size mut-rate]
-   (loop [i 0
-          population (make-population problem pop-size)]
-     (do
+   (loop [i            0
+          population   (make-population problem pop-size)]
+     (let
+       [best (first (sort-population population))
+        bf   (fitness best)]
+
        (println "iteration:" i)
-       (println "best fitness:" (fitness (first (sort-population population))))
+       (println "best fitness:" bf)
 
        (if (= i (- itereration-limit 1))
-         (first (sort-population population))
-         (recur (+ 1 i) (build-new-population population t-size mut-rate)))))))
+         best
+         (recur
+           (+ 1 i)
+           (build-new-population population t-size mut-rate)))))))
 
 (defn run
   [{:keys [num-cities max-coord iter-limit pop-size t-size mut-rate]}]
@@ -129,5 +114,5 @@
       (def plot (icc/scatter-plot))
       (icc/add-points plot xs ys)
       (icc/add-lines plot xs ys)
-      ; (ic/view plot)
+      (ic/view plot)
       )))
