@@ -1,7 +1,9 @@
 (ns genetic-tsp-clj.core
-  (:require [clojure.math.numeric-tower :as math]))
+  (:require [clojure.math.numeric-tower :as math]
+            (incanter [core :as ic]
+                      [charts :as icc])))
 
-(defn sq [a] (math/expt a 2))
+(defn square [a] (math/expt a 2))
 
 (defn in?
   "true if seq contains elm"
@@ -46,16 +48,17 @@
                      (take (- (count parentA) upper-bound) (repeat nil)))]
       (populate-offspring offspring parentB)
       )
-    (Exception. "parents must be the same size")))
+    (throw (Exception. "parents must be the same size"))))
 
 (defn distance
   [a b]
   (math/sqrt (+
-              (sq (- (first a)  (first b)))
-              (sq (- (second a) (second b))))))
+              (square (- (first a)  (first b)))
+              (square (- (second a) (second b))))))
 
 (defn fitness
   [individual]
+  ; (println "individual:" individual)
   (loop [prev   (first individual)
          remain (rest individual)
          fitness 0.0]
@@ -102,12 +105,27 @@
   ([problem itereration-limit pop-size t-size mut-rate]
    (loop [i 0
           population (make-population problem pop-size)]
+     (do
+       (println "iteration:" i)
+       (println "best fitness:" (fitness (first (sort-population population))))
 
-     (if (= i itereration-limit)
-       (first (sort-population population))
-       (recur (+ 1 i) (build-new-population population t-size mut-rate))))))
+       (if (= i (- itereration-limit 1))
+         (first (sort-population population))
+         (recur (+ 1 i) (build-new-population population t-size mut-rate)))))))
 
-(defn -main
-  "I don't do a whole lot ... yet."
-  [& args]
-  (println "Hello, World!"))
+(defn run
+  [{:keys [num-cities max-coord iter-limit pop-size t-size mut-rate]}]
+  (let
+    [
+     problem  (generate-problem num-cities max-coord)
+     solution (solve-problem-serial problem iter-limit pop-size t-size mut-rate)
+     xs       (map first solution)
+     ys       (map second solution)
+     ]
+    (do
+      (println problem)
+      (def plot (icc/scatter-plot))
+      (icc/add-points plot xs ys)
+      (icc/add-lines plot xs ys)
+      ; (ic/view plot)
+      )))
