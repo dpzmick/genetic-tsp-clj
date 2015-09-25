@@ -37,18 +37,20 @@
 
 (defn crossover
   [parentA parentB]
-  (if (= (count parentA) (count parentB))
-    (let
-      [lower-bound (rand-int (count parentA))
-       upper-bound (+ lower-bound (rand-int (- (count parentA) lower-bound)))
-       subset      (subvec parentA lower-bound upper-bound)
-       offspring   (concat
-                     (take lower-bound (repeat nil))
-                     subset
-                     (take (- (count parentA) upper-bound) (repeat nil)))]
-      (populate-offspring offspring parentB)
-      )
-    (throw (Exception. "parents must be the same size"))))
+  {:pre [(= (count parentA) (count parentB))]
+   :post [(and
+            (= (count %) (count parentA))
+            (nil? (some nil? %)))]} ;; some weird bug causes this to happen sometimes
+
+  (let
+    [lower-bound (rand-int (count parentA))
+     upper-bound (+ lower-bound (rand-int (- (count parentA) lower-bound)))
+     subset      (subvec parentA lower-bound upper-bound)
+     offspring   (concat
+                   (take lower-bound (repeat nil))
+                   subset
+                   (take (- (count parentA) upper-bound) (repeat nil)))]
+    (populate-offspring offspring parentB)))
 
 (defn distance
   [a b]
