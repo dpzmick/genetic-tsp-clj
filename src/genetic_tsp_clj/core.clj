@@ -2,8 +2,17 @@
   (:require [clojure.math.numeric-tower :as math]
             [clojure.math.combinatorics :refer [selections]]
             [clojure.core.async :as a :refer [go >! >!! <! <!!]]
+            [clojure.core.async.impl.concurrent :as conc]
+            [clojure.core.async.impl.exec.threadpool :as tp]
             (incanter [core :as ic]
                       [charts :as icc])))
+(defonce my-executor
+  (java.util.concurrent.Executors/newFixedThreadPool
+    32
+    (conc/counted-thread-factory "my-async-dispatch-%d" true)))
+
+(alter-var-root #'clojure.core.async.impl.dispatch/executor
+                (constantly  (delay  (tp/thread-pool-executor my-executor))))
 
 (defn square [a] (math/expt a 2))
 
