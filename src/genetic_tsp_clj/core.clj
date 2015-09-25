@@ -1,5 +1,6 @@
 (ns genetic-tsp-clj.core
   (:require [clojure.math.numeric-tower :as math]
+            [clojure.math.combinatorics :refer [selections]]
             [clojure.core.async :as a :refer [go >! >!! <! <!!]]
             (incanter [core :as ic]
                       [charts :as icc])))
@@ -23,10 +24,11 @@
 (defn crossover
   [parentA parentB]
   {:pre [(= (count parentA) (count parentB))]
-   :post [(nil? (some nil? %))]} ;; some weird bug causes this to happen sometimes
+   :post [(and (= (count parentA) (count %))
+               (nil? (some nil? %)))]} ;; some weird bug causes this to happen sometimes
 
   (let
-    [split-point (+ 1 (rand-int (- (count parentA) 1))) ;; random between 0-A
+    [split-point (rand-int (count parentA))
      subset      (subvec parentA 0 split-point)
      bwithoutsubset (filter #(not (in? subset %)) parentB)]
     (reduce conj subset bwithoutsubset)))
@@ -39,7 +41,6 @@
 
 (defn fitness
   [individual]
-  ; (println "individual:" individual)
   (loop [prev   (first individual)
          remain (rest individual)
          fitness 0.0]
@@ -57,9 +58,7 @@
 (defn generate-problem
   "creates a problem with n elements"
   [n m]
-  (take n (map vector
-               (repeatedly #(rand-int m))
-               (repeatedly #(rand-int m)))))
+  (apply vector (take n (shuffle (selections (range m) 2)))))
 
 (defn make-population
   [problem size]
@@ -74,30 +73,26 @@
 
 (defn build-new-population
   [population t-size mutation-rate]
-  (map #(if (< (rand) mutation-rate)
-          (mutate %)
-          %)
-       (take (count population) (repeatedly #(crossover
-                                               (select-by-tournament population t-size)
-                                               (select-by-tournament population t-size))))))
+  (map
+    #(if (< (rand) mutation-rate) (mutate %) %)
+    (take (count population) (repeatedly #(crossover
+                                            (select-by-tournament population t-size)
+                                            (select-by-tournament population t-size))))))
 
 (defn solve-problem-serial
   "solves a problem. stops when we hit iteration limit or fitness changes less than tolerance"
-  ([problem itereration-limit pop-size t-size mut-rate]
-   (loop [i            0
-          population   (make-population problem pop-size)]
-     (let
-       [best (first (sort-population population))
-        bf   (fitness best)]
+  [problem itereration-limit pop-size t-size mut-rate]
+  (loop [i            0
+         population   (make-population problem pop-size)]
+    (let
+      [best (first (sort-population population))
+       bf   (fitness best)]
 
-       (println "iteration:" i)
-       (println "best fitness:" bf)
-
-       (if (= i (- itereration-limit 1))
-         best
-         (recur
-           (+ 1 i)
-           (build-new-population population t-size mut-rate)))))))
+      (if (= i (- itereration-limit 1))
+        best
+        (recur
+          (+ 1 i)
+          (build-new-population population t-size mut-rate))))))
 
 (defn neighbors
   [channels my-id]
@@ -107,7 +102,7 @@
     :else                            [(nth channels (+ my-id 1)) (nth channels (- my-id 1))]))
 
 (defn worker
-  [id channels state iter-limit]
+  [id channels state iter-limit mut-rate]
   (a/go-loop
     [state state
      i 0]
@@ -118,7 +113,9 @@
        sorted      (sort-population individuals)
        fst         (first sorted)
        snd         (second sorted)
-       value       (crossover fst snd)]
+       value       (if (< (rand) mut-rate)
+                     (mutate (crossover fst snd))
+                     (crossover fst snd))]
 
       (if (= i iter-limit)
         value
@@ -132,7 +129,7 @@
      results    (map <!!
                      (reduce
                        #(let
-                          [channel (worker %2 channels (nth population %2) iter-limit)]
+                          [channel (worker %2 channels (nth population %2) iter-limit mut-rate)]
                           (conj %1 channel))
                        []
                        (range pop-size)))]
@@ -148,7 +145,6 @@
      ys       (map second solution)
      ]
     (do
-      (println problem)
       (def plot (icc/scatter-plot))
       (icc/add-points plot xs ys)
       (icc/add-lines plot xs ys)
@@ -165,7 +161,6 @@
      ys       (map second solution)
      ]
     (do
-      (println problem)
       (def plot (icc/scatter-plot))
       (icc/add-points plot xs ys)
       (icc/add-lines plot xs ys)
